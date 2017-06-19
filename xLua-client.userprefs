@@ -1,0 +1,23 @@
+﻿<Properties StartupItem="Assembly-CSharp.csproj">
+  <MonoDevelop.Ide.Workspace ActiveConfiguration="Debug" PreferredExecutionTarget="Unity.Instance.Unity Editor" />
+  <MonoDevelop.Ide.Workbench ActiveDocument="Assets/Script/TestClass2.cs">
+    <Files>
+      <File FileName="Assets/Script/Main.cs" Line="20" Column="1" />
+      <File FileName="Assets/Script/LuaClient.cs" Line="42" Column="34" />
+      <File FileName="Assets/XLua/Src/LuaEnv.cs" Line="410" Column="14" />
+      <File FileName="Assets/Script/TestClass2.cs" Line="32" Column="3" />
+      <File FileName="Assets/Script/LuaConst.cs" Line="10" Column="1" />
+      <File FileName="Assets/XLua/Examples/02_U3DScripting/LuaBehaviour.cs" Line="1" Column="1" />
+      <File FileName="Assets/XLua/Src/Editor/Hotfix.cs" Line="1" Column="1" />
+      <File FileName="Assets/XLua/Src/GenAttributes.cs" Line="1" Column="1" />
+      <File FileName="Assets/Script/HotfixCfg.cs" Line="10" Column="16" />
+      <File FileName="Assets/Script/TestClass1.cs" Line="1" Column="1" />
+    </Files>
+  </MonoDevelop.Ide.Workbench>
+  <MonoDevelop.Ide.DebuggingService.Breakpoints>
+    <BreakpointStore />
+  </MonoDevelop.Ide.DebuggingService.Breakpoints>
+  <MonoDevelop.Ide.DebuggingService.PinnedWatches>
+    <Watch file="Assets/XLua/Src/Editor/Hotfix.cs" line="1080" offsetX="732" offsetY="23738" expression="hotfix_injection.StartInfo.FileName" liveUpdate="False" />
+  </MonoDevelop.Ide.DebuggingService.PinnedWatches>
+</Properties>

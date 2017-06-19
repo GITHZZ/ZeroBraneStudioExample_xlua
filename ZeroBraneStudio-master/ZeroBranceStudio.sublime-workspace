@@ -1,0 +1,737 @@
+{
+	"auto_complete":
+	{
+		"selected_items":
+		[
+			[
+				"w",
+				"write"
+			],
+			[
+				"li",
+				"line"
+			],
+			[
+				"set",
+				"set_templete_code"
+			],
+			[
+				"lo",
+				"log"
+			],
+			[
+				"open",
+				"openBtnTrans"
+			],
+			[
+				"openB",
+				"openBtnTrans"
+			],
+			[
+				"lua",
+				"luaBehaviour"
+			],
+			[
+				"Pro",
+				"PromptCtrl"
+			]
+		]
+	},
+	"buffers":
+	[
+		{
+			"contents": "-- Copyright 2011-15 Paul Kulchenko, ZeroBrane LLC\n-- authors: Luxinia Dev (Eike Decker & Christoph Kubisch)\n---------------------------------------------------------\n\n-- put bin/ and lualibs/ first to avoid conflicts with included modules\n-- that may have other versions present somewhere else in path/cpath.\nlocal function isproc()\n  local file = io.open(\"/proc\")\n  if file then file:close() end\n  return file ~= nil\nend\nlocal iswindows = os.getenv('WINDIR') or (os.getenv('OS') or ''):match('[Ww]indows')\nlocal islinux = not iswindows and isproc()\nlocal arch = \"x86\" -- use 32bit by default\nlocal unpack = table.unpack or unpack\n\nif islinux then\n  local file = io.popen(\"uname -m\")\n  if file then\n    local machine=file:read(\"*l\")\n    local archtype= { x86_64=\"x64\", armv7l=\"armhf\" }\n    arch = archtype[machine] or \"x86\"\n    file:close()\n  end\nend\n\npackage.cpath = (\n  iswindows and 'bin/?.dll;bin/clibs/?.dll;' or\n  islinux and ('bin/linux/%s/lib?.so;bin/linux/%s/clibs/lib?.so;bin/linux/%s/clibs/?.so;'):format(arch,arch,arch) or\n  --[[isosx]] 'bin/lib?.dylib;bin/clibs/lib?.dylib;bin/clibs/?.dylib;')\n    .. package.cpath\npackage.path  = 'lualibs/?.lua;lualibs/?/?.lua;lualibs/?/init.lua;lualibs/?/?/?.lua;lualibs/?/?/init.lua;'\n              .. package.path\n\nrequire(\"wx\")\nrequire(\"bit\")\nrequire(\"mobdebug\")\nif jit and jit.on then jit.on() end -- turn jit \"on\" as \"mobdebug\" may turn it off for LuaJIT\n\ndofile \"src/util.lua\"\n\n-----------\n-- IDE\n--\nlocal pendingOutput = {}\nide = {\n  MODPREF = \"* \",\n  MAXMARGIN = wxstc.wxSTC_MAX_MARGIN or 4,\n  ANYMARKERMASK = 2^24-1,\n  config = {\n    path = {\n      projectdir = \"\",\n      app = nil,\n    },\n    editor = {\n      autoactivate = false,\n      foldcompact = true,\n      checkeol = true,\n      saveallonrun = false,\n      caretline = true,\n      commentlinetoggle = false,\n      showfncall = false,\n      autotabs = false,\n      usetabs  = false,\n      tabwidth = 2,\n      usewrap = true,\n      wrapmode = wxstc.wxSTC_WRAP_WORD,\n      calltipdelay = 500,\n      smartindent = true,\n      fold = true,\n      autoreload = true,\n      indentguide = true,\n      backspaceunindent = true,\n      linenumber = true,\n    },\n    debugger = {\n      allowediting = false,\n      verbose = false,\n      hostname = nil,\n      ignorecase = false,\n      linetobreakpoint = false,\n      numformat = \"%.16g\",\n      port = nil,\n      runonstart = nil,\n      redirect = nil,\n      maxdatalength = 256,\n      maxdatanum = 128,\n      maxdatalevel = 3,\n      refuseonconflict = true,\n    },\n    default = {\n      name = 'untitled',\n      fullname = 'untitled.lua',\n      interpreter = 'luadeb',\n    },\n    outputshell = {\n      usewrap = true,\n    },\n    filetree = {\n      mousemove = true,\n      showchanges = true,\n    },\n    outline = {\n      activateonclick = true,\n      jumptocurrentfunction = true,\n      showanonymous = '~',\n      showcurrentfunction = true,\n      showcompact = false,\n      showflat = false,\n      showmethodindicator = false,\n      showonefile = false,\n      sort = false,\n    },\n    commandbar = {\n      prefilter = 250, -- number of records after which to apply filtering\n      maxitems = 30, -- max number of items to show\n      maxlines = 8, -- max number of lines to show\n      width = 0.35, -- <1 -- size in proportion to the app frame width; >=1 -- size in pixels\n      showallsymbols = true, -- show all symbols in a project\n    },\n    staticanalyzer = {\n      infervalue = false, -- run more detailed static analysis; off by default as it's a slower mode\n    },\n    search = {\n      autocomplete = true,\n      contextlinesbefore = 2,\n      contextlinesafter = 2,\n      showaseditor = false,\n      zoom = 0,\n      autohide = false,\n    },\n    print = {\n      magnification = -3,\n      wrapmode = wxstc.wxSTC_WRAP_WORD,\n      colourmode = wxstc.wxSTC_PRINT_BLACKONWHITE,\n      header = \"%S\\t%D\\t%p/%P\",\n      footer = nil,\n    },\n    toolbar = {\n      icons = {},\n      iconmap = {},\n      iconsize = nil, -- icon size is set dynamically unless specified in the config\n    },\n\n    keymap = {},\n    imagemap = {\n      ['VALUE-MCALL'] = 'VALUE-SCALL',\n    },\n    messages = {},\n    language = \"en\",\n\n    styles = nil,\n    stylesoutshell = nil,\n\n    autocomplete = true,\n    autoanalyzer = true,\n    acandtip = {\n      startat = 2,\n      shorttip = true,\n      nodynwords = true,\n      ignorecase = false,\n      fillups = nil,\n      symbols = true,\n      droprest = true,\n      strategy = 2,\n      width = 60,\n      maxlength = 450,\n      warning = true,\n    },\n    arg = {}, -- command line arguments\n    api = {}, -- additional APIs to load\n\n    format = { -- various formatting strings\n      menurecentprojects = \"%f | %i\",\n      apptitle = \"%T - %F\",\n    },\n\n    activateoutput = true, -- activate output/console on Run/Debug/Compile\n    unhidewindow = false, -- to unhide a gui window\n    projectautoopen = true,\n    autorecoverinactivity = 10, -- seconds\n    outlineinactivity = 0.250, -- seconds\n    markersinactivity = 0.500, -- seconds\n    symbolindexinactivity = 2, -- seconds\n    filehistorylength = 20,\n    projecthistorylength = 20,\n    commandlinehistorylength = 10,\n    bordersize = 3,\n    savebak = false,\n    singleinstance = false,\n    singleinstanceport = 0xe493,\n    showmemoryusage = false,\n    showhiddenfiles = false,\n    hidpi = false, -- HiDPI/Retina display support\n    hotexit = false,\n    imagetint = nil,\n    markertint = true,\n    menuicon = true,\n    -- file exclusion lists\n    excludelist = {\".svn/\", \".git/\", \".hg/\", \"CVS/\", \"*.pyc\", \"*.pyo\", \"*.exe\", \"*.dll\", \"*.obj\",\"*.o\", \"*.a\", \"*.lib\", \"*.so\", \"*.dylib\", \"*.ncb\", \"*.sdf\", \"*.suo\", \"*.pdb\", \"*.idb\", \".DS_Store\", \"*.class\", \"*.psd\", \"*.db\"},\n    binarylist = {\"*.jpg\", \"*.jpeg\", \"*.png\", \"*.gif\", \"*.ttf\", \"*.tga\", \"*.dds\", \"*.ico\", \"*.eot\", \"*.pdf\", \"*.swf\", \"*.jar\", \"*.zip\", \".gz\", \".rar\"},\n  },\n  specs = {\n    none = {\n      sep = \"\\1\",\n    }\n  },\n  tools = {},\n  iofilters = {},\n  interpreters = {},\n  packages = {},\n  apis = {},\n  timers = {},\n  onidle = {},\n\n  proto = {}, -- prototypes for various classes\n\n  app = nil, -- application engine\n  interpreter = nil, -- current Lua interpreter\n  frame = nil, -- gui related\n  debugger = {}, -- debugger related info\n  filetree = nil, -- filetree\n  findReplace = nil, -- find & replace handling\n  settings = nil, -- user settings (window pos, last files..)\n  session = {\n    projects = {}, -- project configuration for the current session\n    lastupdated = nil, -- timestamp of the last modification in any of the editors\n    lastsaved = nil, -- timestamp of the last recovery information saved\n  },\n\n  -- misc\n  exitingProgram = false, -- are we currently exiting, ID_EXIT\n  infocus = nil, -- last component with a focus\n  editorApp = wx.wxGetApp(),\n  editorFilename = nil,\n  openDocuments = {},-- open notebook editor documents[winId] = {\n  -- editor = wxStyledTextCtrl,\n  -- index = wxNotebook page index,\n  -- filePath = full filepath, nil if not saved,\n  -- fileName = just the filename,\n  -- modTime = wxDateTime of disk file or nil,\n  -- isModified = bool is the document modified? }\n  ignoredFilesList = {},\n  font = {\n    eNormal = nil,\n    eItalic = nil,\n    oNormal = nil,\n    oItalic = nil,\n    fNormal = nil,\n  },\n\n  osname = wx.wxPlatformInfo.Get():GetOperatingSystemFamilyName(),\n  osarch = arch,\n  oshome = os.getenv(\"HOME\") or (iswindows and os.getenv('HOMEDRIVE') and os.getenv('HOMEPATH')\n    and (os.getenv('HOMEDRIVE')..os.getenv('HOMEPATH'))),\n  wxver = string.match(wx.wxVERSION_STRING, \"[%d%.]+\"),\n\n  startedat = TimeGet(),\n  test = {}, -- local functions used for testing\n\n  Print = function(self, ...)\n    if DisplayOutputLn then\n      -- flush any pending output\n      while #pendingOutput > 0 do DisplayOutputLn(unpack(table.remove(pendingOutput, 1))) end\n      -- print without parameters can be used for flushing, so skip the printing\n      if select('#', ...) > 0 then DisplayOutputLn(...) end\n      return\n    end\n    pendingOutput[#pendingOutput + 1] = {...}\n  end,\n}\n-- Scintilla switched to using full byte for style numbers from using only first 5 bits\nide.STYLEMASK = ide.wxver <= \"2.9.5\" and 31 or 255\n\n-- add wx.wxMOD_RAW_CONTROL as it's missing in wxlua 2.8.12.3;\n-- provide default for wx.wxMOD_CONTROL as it's missing in wxlua 2.8 that\n-- is available through Linux package managers\nif not wx.wxMOD_CONTROL then wx.wxMOD_CONTROL = 0x02 end\nif not wx.wxMOD_RAW_CONTROL then\n  wx.wxMOD_RAW_CONTROL = ide.osname == 'Macintosh' and 0x10 or wx.wxMOD_CONTROL\nend\nif not wx.WXK_RAW_CONTROL then\n  wx.WXK_RAW_CONTROL = ide.osname == 'Macintosh' and 396 or wx.WXK_CONTROL\nend\n-- ArchLinux running 2.8.12.2 doesn't have wx.wxMOD_SHIFT defined\nif not wx.wxMOD_SHIFT then wx.wxMOD_SHIFT = 0x04 end\n-- wxDIR_NO_FOLLOW is missing in wxlua 2.8.12 as well\nif not wx.wxDIR_NO_FOLLOW then wx.wxDIR_NO_FOLLOW = 0x10 end\nif not wxaui.wxAUI_TB_PLAIN_BACKGROUND then wxaui.wxAUI_TB_PLAIN_BACKGROUND = 2^8 end\nif not wx.wxNOT_FOUND then wx.wxNOT_FOUND = -1 end\n\nif not setfenv then -- Lua 5.2\n  -- based on http://lua-users.org/lists/lua-l/2010-06/msg00314.html\n  -- this assumes f is a function\n  local function findenv(f)\n    local level = 1\n    repeat\n      local name, value = debug.getupvalue(f, level)\n      if name == '_ENV' then return level, value end\n      level = level + 1\n    until name == nil\n    return nil end\n  getfenv = function (f) return(select(2, findenv(f)) or _G) end\n  setfenv = function (f, t)\n    local level = findenv(f)\n    if level then debug.setupvalue(f, level, t) end\n    return f end\nend\n\nif not package.searchpath then\n  -- from Scintillua by Mitchell (mitchell.att.foicica.com).\n  -- Searches for the given *name* in the given *path*.\n  -- This is an implementation of Lua 5.2's `package.searchpath()` function for Lua 5.1.\n  function package.searchpath(name, path)\n    local tried = {}\n    for part in path:gmatch('[^;]+') do\n      local filename = part:gsub('%?', name)\n      local f = io.open(filename, 'r')\n      if f then f:close() return filename end\n      tried[#tried + 1] = (\"no file '%s'\"):format(filename)\n    end\n    return nil, table.concat(tried, '\\n')\n  end\nend\n\nlocal function loadToTab(folder, tab, recursive, proto)\n  local files = (wx.wxFileExists(folder) and {folder}\n    or wx.wxDirExists(folder) and FileSysGetRecursive(folder, recursive, \"*.lua\")\n    or {})\n  for _, file in ipairs(files) do LoadLuaFileExt(tab, file, proto) end\n  return tab\nend\n\nfunction ide:LoadSpec(path)\n  loadToTab(path or \"spec\", ide.specs, true)\n  UpdateSpecs()\n  -- force reload of all APIs as some of them may depend on the specs\n  if ReloadAPIs then ReloadAPIs(\"*\") end\nend\n\nfunction ide:LoadTool(path)\n  local tools = {}\n  for name,tool in pairs(loadToTab(path or \"tools\", {}, false)) do\n    if tool.fninit then\n      local ok, err = pcall(tool.fninit, ide:GetMainFrame(), ide:GetMenuBar())\n      if not ok then ide:Print((\"Error when initializing tool %s: %s\"):format(name, err)) end\n    end\n    if tool.exec and tool.exec.name then table.insert(tools,tool) end\n  end\n\n  -- sort tools\n  table.sort(tools,function(a,b) return a.exec.name < b.exec.name end)\n\n  for _, tool in ipairs(tools) do\n    -- add menus for each\n    local id, menu = ide:AddTool(tool.exec.name, tool.exec.fn)\n    -- add descriptions\n    if id and tool.exec.description then menu:SetHelpString(id, tool.exec.description) end\n  end\n\n  return #tools\nend\n\nfunction ide:LoadInterpreter(path)\n  loadToTab(path or \"interpreters\", ide.interpreters, false, ide.proto.Interpreter)\nend\n\nfunction ide:LoadAPI(path)\n  local folder = path or \"api\"\n  local files = (wx.wxFileExists(folder) and {folder}\n    or wx.wxDirExists(folder) and FileSysGetRecursive(folder, true, \"*.lua\")\n    or {})\n  for _, file in ipairs(files) do\n    if not IsDirectory(file) then\n      local ftype, fname = file:match(\"api[/\\\\]([^/\\\\]+)[/\\\\](.*)%.\")\n      if not ftype or not fname then\n        ide:Print(TR(\"The API file must be located in a subdirectory of the API directory.\"))\n      else\n        ide.apis[ftype] = ide.apis[ftype] or {}\n        -- make sure the path is absolute to access it if the current directory changes\n        ide.apis[ftype][fname] = MergeFullPath(\"\", file)\n      end\n    end\n  end\n  if ReloadAPIs then ReloadAPIs(\"*\") end\nend\n\ndofile \"src/version.lua\"\n\nfor _, file in ipairs({\"proto\", \"ids\", \"style\", \"keymap\", \"toolbar\", \"package\"}) do\n  dofile(\"src/editor/\"..file..\".lua\")\nend\n\nide.config.styles = StylesGetDefault()\nide.config.stylesoutshell = StylesGetDefault()\n\nlocal function setLuaPaths(mainpath, osname)\n  -- use LUA_DEV to setup paths for Lua for Windows modules if installed\n  local luadev = osname == \"Windows\" and os.getenv('LUA_DEV')\n  if luadev and not wx.wxDirExists(luadev) then luadev = nil end\n  local luadev_path = (luadev\n    and ('LUA_DEV/?.lua;LUA_DEV/?/init.lua;LUA_DEV/lua/?.lua;LUA_DEV/lua/?/init.lua')\n      :gsub('LUA_DEV', (luadev:gsub('[\\\\/]$','')))\n    or nil)\n  local luadev_cpath = (luadev\n    and ('LUA_DEV/?.dll;LUA_DEV/?51.dll;LUA_DEV/clibs/?.dll;LUA_DEV/clibs/?51.dll')\n      :gsub('LUA_DEV', (luadev:gsub('[\\\\/]$','')))\n    or nil)\n\n  if luadev then\n    local path, clibs = os.getenv('PATH'), luadev:gsub('[\\\\/]$','')..'\\\\clibs'\n    if not path:find(clibs, 1, true) then wx.wxSetEnv('PATH', path..';'..clibs) end\n  end\n\n  -- (luaconf.h) in Windows, any exclamation mark ('!') in the path is replaced\n  -- by the path of the directory of the executable file of the current process.\n  -- this effectively prevents any path with an exclamation mark from working.\n  -- if the path has an excamation mark, allow Lua to expand it as this\n  -- expansion happens only once.\n  if osname == \"Windows\" and mainpath:find('%!') then mainpath = \"!/../\" end\n\n  -- if LUA_PATH or LUA_CPATH is not specified, then add ;;\n  -- ;; will be replaced with the default (c)path by the Lua interpreter\n  wx.wxSetEnv(\"LUA_PATH\",\n    (os.getenv(\"LUA_PATH\") or ';') .. ';'\n    .. \"./?.lua;./?/init.lua;./lua/?.lua;./lua/?/init.lua\" .. ';'\n    .. mainpath..\"lualibs/?/?.lua;\"..mainpath..\"lualibs/?.lua;\"\n    .. mainpath..\"lualibs/?/?/init.lua;\"..mainpath..\"lualibs/?/init.lua\"\n    .. (luadev_path and (';' .. luadev_path) or ''))\n\n  ide.osclibs = -- keep the list to use for various Lua versions\n    osname == \"Windows\" and table.concat({\n        mainpath..\"bin/?.dll\",\n        mainpath..\"bin/clibs/?.dll\",\n      },\";\") or\n    osname == \"Macintosh\" and table.concat({\n        mainpath..\"bin/lib?.dylib\",\n        mainpath..\"bin/clibs/?.dylib\",\n        mainpath..\"bin/clibs/lib?.dylib\",\n      },\";\") or\n    osname == \"Unix\" and table.concat({\n        mainpath..(\"bin/linux/%s/lib?.so\"):format(arch),\n        mainpath..(\"bin/linux/%s/clibs/?.so\"):format(arch),\n        mainpath..(\"bin/linux/%s/clibs/lib?.so\"):format(arch),\n      },\";\") or\n    assert(false, \"Unexpected OS name\")\n\n  wx.wxSetEnv(\"LUA_CPATH\",\n    (os.getenv(\"LUA_CPATH\") or ';') .. ';' .. ide.osclibs\n    .. (luadev_cpath and (';' .. luadev_cpath) or ''))\n\n  -- on some OSX versions, PATH is sanitized to not include even /usr/local/bin; add it\n  if osname == \"Macintosh\" then\n    local ok, path = wx.wxGetEnv(\"PATH\")\n    if ok then wx.wxSetEnv(\"PATH\", (#path > 0 and path..\":\" or \"\")..\"/usr/local/bin\") end\n  end\nend\n\nide.test.setLuaPaths = setLuaPaths\n\n---------------\n-- process args\nlocal filenames = {}\nlocal configs = {}\ndo\n  local arg = {...}\n  -- application name is expected as the first argument\n  local fullPath = arg[1] or \"zbstudio\"\n\n  ide.arg = arg\n\n  -- on Windows use GetExecutablePath, which is Unicode friendly,\n  -- whereas wxGetCwd() is not (at least in wxlua 2.8.12.2).\n  -- some wxlua version on windows report wx.dll instead of *.exe.\n  local exepath = wx.wxStandardPaths.Get():GetExecutablePath()\n  if ide.osname == \"Windows\" and exepath:find(\"%.exe$\") then\n    fullPath = exepath\n  -- path handling only works correctly on UTF8-valid strings, so check for that.\n  -- This may be caused by the launcher on Windows using ANSI methods for command line\n  -- processing. Keep the path as is for UTF-8 invalid strings as it's still good enough\n  elseif not wx.wxIsAbsolutePath(fullPath) and wx.wxString().FromUTF8(fullPath) == fullPath then\n    fullPath = MergeFullPath(wx.wxGetCwd(), fullPath)\n  end\n\n  ide.editorFilename = fullPath\n  ide.appname = fullPath:match(\"([%w_-%.]+)$\"):gsub(\"%.[^%.]*$\",\"\")\n  assert(ide.appname, \"no application path defined\")\n\n  for index = 2, #arg do\n    if (arg[index] == \"-cfg\" and index+1 <= #arg) then\n      table.insert(configs,arg[index+1])\n    elseif arg[index-1] ~= \"-cfg\"\n    -- on OSX command line includes -psn... parameter, don't include these\n    and (ide.osname ~= 'Macintosh' or not arg[index]:find(\"^-psn\")) then\n      table.insert(filenames,arg[index])\n    end\n  end\n\n  setLuaPaths(GetPathWithSep(ide.editorFilename), ide.osname)\nend\n\n----------------------\n-- process application\n\nide.app = dofile(ide.appname..\"/app.lua\")\nlocal app = assert(ide.app)\n\n-- load packages\nlocal function processPackages(packages)\n  -- check dependencies and assign file names to each package\n  local skip = {}\n  for fname, package in pairs(packages) do\n    if type(package.dependencies) == 'table'\n    and package.dependencies.osname\n    and not package.dependencies.osname:find(ide.osname, 1, true) then\n      ide:Print((\"Package '%s' not loaded: requires %s platform, but you are running %s.\")\n        :format(fname, package.dependencies.osname, ide.osname))\n      skip[fname] = true\n    end\n\n    local needsversion = tonumber(package.dependencies)\n      or type(package.dependencies) == 'table' and tonumber(package.dependencies[1])\n      or -1\n    local isversion = tonumber(ide.VERSION)\n    if isversion and needsversion > isversion then\n      ide:Print((\"Package '%s' not loaded: requires version %s, but you are running version %s.\")\n        :format(fname, needsversion, ide.VERSION))\n      skip[fname] = true\n    end\n    package.fname = fname\n  end\n\n  for fname, package in pairs(packages) do\n    if not skip[fname] then ide.packages[fname] = package end\n  end\nend\n\nfunction UpdateSpecs(spec)\n  for _, spec in pairs(spec and {spec} or ide.specs) do\n    spec.sep = spec.sep or \"\\1\" -- default separator doesn't match anything\n    spec.iscomment = {}\n    spec.iskeyword = {}\n    spec.isstring = {}\n    spec.isnumber = {}\n    if spec.lexerstyleconvert then\n      for _, s in pairs(spec.lexerstyleconvert.comment or {}) do spec.iscomment[s] = true end\n      for _, s in pairs(spec.lexerstyleconvert.keywords0 or {}) do spec.iskeyword[s] = true end\n      for _, s in pairs(spec.lexerstyleconvert.stringtxt or {}) do spec.isstring[s] = true end\n      for _, s in pairs(spec.lexerstyleconvert.number or {}) do spec.isnumber[s] = true end\n    end\n  end\nend\n\n----------------------\n-- process config\n\n-- set ide.config environment\ndo\n  ide.configs = {\n    system = MergeFullPath(\"cfg\", \"user.lua\"),\n    user = ide.oshome and MergeFullPath(ide.oshome, \".\"..ide.appname..\"/user.lua\"),\n  }\n  ide.configqueue = {}\n\n  local num = 0\n  local package = setmetatable({}, {\n      __index = function(_,k) return package[k] end,\n      __newindex = function(_,k,v) package[k] = v end,\n      __call = function(_,p)\n        -- package can be defined inline, like \"package {...}\"\n        if type(p) == 'table' then\n          num = num + 1\n          return ide:AddPackage('config'..num..'package', p)\n        -- package can be included as \"package 'file.lua'\" or \"package 'folder/'\"\n        elseif type(p) == 'string' then\n          local config = ide.configqueue[#ide.configqueue]\n          local pkg\n          for _, packagepath in ipairs({\n              '.', 'packages/', '../packages/',\n              ide.oshome and MergeFullPath(ide.oshome, \".\"..ide.appname..\"/packages\")}) do\n            local p = MergeFullPath(config and MergeFullPath(config, packagepath) or packagepath, p)\n            pkg = wx.wxDirExists(p) and loadToTab(p, {}, false, ide.proto.Plugin)\n              or wx.wxFileExists(p) and LoadLuaFileExt({}, p, ide.proto.Plugin)\n              or wx.wxFileExists(p..\".lua\") and LoadLuaFileExt({}, p..\".lua\", ide.proto.Plugin)\n            if pkg then\n              processPackages(pkg)\n              break\n            end\n          end\n          if not pkg then ide:Print((\"Can't find '%s' to load package from.\"):format(p)) end\n        else\n          ide:Print((\"Can't load package based on parameter of type '%s'.\"):format(type(p)))\n        end\n      end,\n    })\n\n  local includes = {}\n  local include = function(c)\n    if c then\n      for _, config in ipairs({ide.configqueue[#ide.configqueue], ide.configs.user, ide.configs.system}) do\n        local p = config and MergeFullPath(config..\"/../\", c)\n        includes[p] = (includes[p] or 0) + 1\n        if includes[p] > 1 or LoadLuaConfig(p) or LoadLuaConfig(p..\".lua\") then return end\n        includes[p] = includes[p] - 1\n      end\n      ide:Print((\"Can't find configuration file '%s' to process.\"):format(c))\n    end\n  end\n\n  setmetatable(ide.config, {\n    __index = setmetatable({\n        -- these are provided for compatibility only to avoid breaking configs using `load.*`\n        load = {\n          interpreters = function() ide:Print(\"Warning: using `load.interpreters()` in config is deprecated.\") end,\n          specs = function() ide:Print(\"Warning: using `load.specs()` in config is deprecated.\") end,\n          tools = function() ide:Print(\"Warning: using `load.tools()` in config is deprecated.\") end,\n        },\n        package = package,\n        include = include,\n    }, {__index = _G or _ENV})\n  })\nend\n\nLoadLuaConfig(ide.appname..\"/config.lua\")\n\nide.editorApp:SetAppName(ide:GetProperty(\"settingsapp\"))\n\n-- check if the .ini file needs to be migrated on Windows\nif ide.osname == 'Windows' and ide.wxver >= \"2.9.5\" then\n  -- Windows used to have local ini file kept in wx.wxGetHomeDir (before 2.9),\n  -- but since 2.9 it's in GetUserConfigDir(), so migrate it.\n  local ini = ide.editorApp:GetAppName() .. \".ini\"\n  local old = wx.wxFileName(wx.wxGetHomeDir(), ini)\n  local new = wx.wxFileName(wx.wxStandardPaths.Get():GetUserConfigDir(), ini)\n  if old:FileExists() and not new:FileExists() then\n    FileCopy(old:GetFullPath(), new:GetFullPath())\n    ide:Print((\"Migrated configuration file from '%s' to '%s'.\")\n      :format(old:GetFullPath(), new:GetFullPath()))\n  end\nend\n\n----------------------\n-- process plugins\n\nif app.preinit then app.preinit() end\n\nide:LoadInterpreter()\nide:LoadSpec()\n\ndo\n  -- process configs\n  LoadLuaConfig(ide.configs.system)\n  LoadLuaConfig(ide.configs.user)\n\n  -- process all other configs (if any)\n  for _, v in ipairs(configs) do LoadLuaConfig(v, true) end\n  configs = nil\n\n  -- check and apply default styles in case a user resets styles in the config\n  for _, styles in ipairs({\"styles\", \"stylesoutshell\"}) do\n    if not ide.config[styles] then\n      ide:Print((\"Ignored incorrect value of '%s' setting in the configuration file\")\n        :format(styles))\n      ide.config[styles] = StylesGetDefault()\n    end\n  end\n\n  local sep = GetPathSeparator()\n  if ide.config.language then\n    LoadLuaFileExt(ide.config.messages, \"cfg\"..sep..\"i18n\"..sep..ide.config.language..\".lua\")\n  end\n  -- always load 'en' as it's requires as a fallback for pluralization\n  if ide.config.language ~= 'en' then\n    LoadLuaFileExt(ide.config.messages, \"cfg\"..sep..\"i18n\"..sep..\"en.lua\")\n  end\nend\n\nprocessPackages(loadToTab(\"packages\", {}, false, ide.proto.Plugin))\nif ide.oshome then\n  local userpackages = MergeFullPath(ide.oshome, \".\"..ide.appname..\"/packages\")\n  if wx.wxDirExists(userpackages) then\n    processPackages(loadToTab(userpackages, {}, false, ide.proto.Plugin))\n  end\nend\n\n---------------\n-- Load App\n\nfor _, file in ipairs({\n    \"settings\", \"singleinstance\", \"iofilters\", \"markup\",\n    \"gui\", \"filetree\", \"output\", \"debugger\", \"outline\", \"commandbar\",\n    \"editor\", \"findreplace\", \"commands\", \"autocomplete\", \"shellbox\", \"markers\",\n    \"menu_file\", \"menu_edit\", \"menu_search\", \"menu_view\", \"menu_project\", \"menu_help\",\n    \"print\", \"inspect\" }) do\n  dofile(\"src/editor/\"..file..\".lua\")\nend\n\n-- delay loading tools until everything is loaded as it modifies the menus\nide:LoadTool()\n-- delay loading APIs until auto-complete is loaded\nide:LoadAPI()\n\n-- register all the plugins\nPackageEventHandle(\"onRegister\")\n\n-- initialization that was delayed until configs processed and packages loaded\nProjectUpdateInterpreters()\n\n-- load rest of settings\nSettingsRestoreFramePosition(ide.frame, \"MainFrame\")\nSettingsRestoreFileHistory(SetFileHistory)\nSettingsRestoreEditorSettings()\nSettingsRestoreProjectSession(FileTreeSetProjects)\nSettingsRestoreFileSession(function(tabs, params)\n  if params and params.recovery\n  then return SetOpenTabs(params)\n  else return SetOpenFiles(tabs, params) end\nend)\nSettingsRestoreView()\n\n-- ---------------------------------------------------------------------------\n-- Load the filenames\n\ndo\n  for _, filename in ipairs(filenames) do\n    if filename ~= \"--\" then ide:ActivateFile(filename) end\n  end\n  if ide:GetEditorNotebook():GetPageCount() == 0 then NewFile() end\nend\n\nif app.postinit then app.postinit() end\n\n-- this is a workaround for a conflict between global shortcuts and local\n-- shortcuts (like F2) used in the file tree or a watch panel.\n-- because of several issues on OSX (as described in details in this thread:\n-- https://groups.google.com/d/msg/wx-dev/juJj_nxn-_Y/JErF1h24UFsJ),\n-- the workaround installs a global event handler that manually re-routes\n-- conflicting events when the current focus is on a proper object.\n-- non-conflicting shortcuts are handled through key-down events.\nlocal remap = {\n  [ID_ADDWATCH]    = ide:GetWatch(),\n  [ID_EDITWATCH]   = ide:GetWatch(),\n  [ID_DELETEWATCH] = ide:GetWatch(),\n  [ID_RENAMEFILE]  = ide:GetProjectTree(),\n  [ID_DELETEFILE]  = ide:GetProjectTree(),\n}\n\nlocal function rerouteMenuCommand(obj, id)\n  -- check if the conflicting shortcut is enabled:\n  -- (1) SetEnabled wasn't called or (2) Enabled was set to `true`.\n  local uievent = wx.wxUpdateUIEvent(id)\n  obj:ProcessEvent(uievent)\n  if not uievent:GetSetEnabled() or uievent:GetEnabled() then\n    obj:AddPendingEvent(wx.wxCommandEvent(wx.wxEVT_COMMAND_MENU_SELECTED, id))\n  end\nend\n\nlocal function remapkey(event)\n  local keycode = event:GetKeyCode()\n  local mod = event:GetModifiers()\n  for id, obj in pairs(remap) do\n    local focus = obj:FindFocus()\n    if focus and focus:GetId() == obj:GetId() then\n      local ae = wx.wxAcceleratorEntry(); ae:FromString(KSC(id))\n      if ae:GetFlags() == mod and ae:GetKeyCode() == keycode then\n        rerouteMenuCommand(obj, id)\n        return\n      end\n    end\n  end\n  event:Skip()\nend\nide:GetWatch():Connect(wx.wxEVT_KEY_DOWN, remapkey)\nide:GetProjectTree():Connect(wx.wxEVT_KEY_DOWN, remapkey)\n\nlocal function resolveConflict(localid, globalid)\n  return function(event)\n    local shortcut = ide.config.keymap[localid]\n    for id, obj in pairs(remap) do\n      if ide.config.keymap[id]:lower() == shortcut:lower() then\n        local focus = obj:FindFocus()\n        if focus and focus:GetId() == obj:GetId() then\n          obj:AddPendingEvent(wx.wxCommandEvent(wx.wxEVT_COMMAND_MENU_SELECTED, id))\n          return\n        -- also need to check for children of objects\n        -- to avoid re-triggering events when labels are being edited\n        elseif focus and focus:GetParent():GetId() == obj:GetId() then\n          return\n        end\n      end\n    end\n    rerouteMenuCommand(ide.frame, globalid)\n  end\nend\n\nfor lid in pairs(remap) do\n  local shortcut = ide.config.keymap[lid]\n  -- find a (potential) conflict for this shortcut (if any)\n  for gid, ksc in pairs(ide.config.keymap) do\n    -- if the same shortcut is used elsewhere (not one of IDs being checked)\n    if shortcut:lower() == ksc:lower() and not remap[gid] then\n      local fakeid = NewID()\n      ide.frame:Connect(fakeid, wx.wxEVT_COMMAND_MENU_SELECTED, resolveConflict(lid, gid))\n      ide:SetAccelerator(fakeid, ksc)\n    end\n  end\nend\n\nif ide.osname == 'Macintosh' then ide:SetAccelerator(ID_VIEWMINIMIZE, \"Ctrl-M\") end\n\n-- these shortcuts need accelerators handling as they are not present anywhere in the menu\nfor _, id in ipairs({ ID_GOTODEFINITION, ID_RENAMEALLINSTANCES,\n    ID_REPLACEALLSELECTIONS, ID_QUICKADDWATCH, ID_QUICKEVAL, ID_ADDTOSCRATCHPAD}) do\n  local ksc = ide.config.keymap[id]\n  if ksc and ksc > \"\" then\n    local fakeid = NewID()\n    ide.frame:Connect(fakeid, wx.wxEVT_COMMAND_MENU_SELECTED, function()\n        local editor = ide:GetEditorWithFocus(ide:GetEditor())\n        if editor then rerouteMenuCommand(editor, id) end\n      end)\n    ide:SetAccelerator(fakeid, ksc)\n  end\nend\n\nfor _, id in ipairs({ ID_NOTEBOOKTABNEXT, ID_NOTEBOOKTABPREV }) do\n  local ksc = ide.config.keymap[id]\n  if ksc and ksc > \"\" then\n    local nbc = \"wxAuiNotebook\"\n    ide.frame:Connect(id, wx.wxEVT_COMMAND_MENU_SELECTED, function(event)\n        local win = ide.frame:FindFocus()\n        if not win then return end\n\n        local notebook = win:GetClassInfo():GetClassName() == nbc and win:DynamicCast(nbc)\n        or win:GetParent():GetClassInfo():GetClassName() == nbc and win:GetParent():DynamicCast(nbc)\n        or nil\n        if not notebook then return end\n\n        local first, last = 0, notebook:GetPageCount()-1\n        local fwd = event:GetId() == ID_NOTEBOOKTABNEXT\n        if fwd and notebook:GetSelection() == last then\n          notebook:SetSelection(first)\n        elseif not fwd and notebook:GetSelection() == first then\n          notebook:SetSelection(last)\n        else\n          notebook:AdvanceSelection(fwd)\n        end\n      end)\n    ide:SetAccelerator(id, ksc)\n  end\nend\n\n-- only set menu bar *after* postinit handler as it may include adding\n-- app-specific menus (Help/About), which are not recognized by MacOS\n-- as special items unless SetMenuBar is done after menus are populated.\nide.frame:SetMenuBar(ide.frame.menuBar)\n\nide:Print() -- flush pending output (if any)\n\nPackageEventHandle(\"onAppLoad\")\n\n-- this provides a workaround for Ctrl-(Shift-)Tab not navigating over tabs on OSX\n-- http://trac.wxwidgets.org/ticket/17064\nif ide.osname == 'Macintosh' then\n  local frame = ide.frame\n  local focus\n  ide.timers.ctrltab = ide:AddTimer(frame, function(event)\n      local mouse = wx.wxGetMouseState()\n      -- if anything other that Ctrl (along with Shift) is pressed, then cancel the timer\n      if not ide:IsValidCtrl(focus)\n      or not wx.wxGetKeyState(wx.WXK_RAW_CONTROL)\n      or wx.wxGetKeyState(wx.WXK_ALT) or wx.wxGetKeyState(wx.WXK_CONTROL)\n      or mouse:LeftDown() or mouse:RightDown() or mouse:MiddleDown() then\n        ide.timers.ctrltab:Stop()\n        return\n      end\n      local ctrl = frame:FindFocus()\n      if not ctrl then return end\n      local nb = focus:GetParent():DynamicCast(\"wxAuiNotebook\")\n      -- when moving backward from the very first tab, the focus moves\n      -- to wxAuiTabCtrl on OSX, so need to take that into account\n      if nb:GetId() ~= ctrl:GetParent():GetId()\n      or ctrl:GetClassInfo():GetClassName() == \"wxAuiTabCtrl\" then\n        local frwd = not wx.wxGetKeyState(wx.WXK_SHIFT)\n        if nb:GetId() ~= ctrl:GetParent():GetId()\n        or not frwd and nb:GetSelection() == 0\n        or frwd and nb:GetSelection() == nb:GetPageCount()-1 then\n          nb:AdvanceSelection(frwd)\n          focus = nb:GetPage(nb:GetSelection())\n          focus:SetFocus()\n        end\n        -- don't cancel the timer as the user may be cycling through tabs\n      end\n    end)\n\n  frame:Connect(wx.wxEVT_CHAR_HOOK, function(event)\n      local key = event:GetKeyCode()\n      if key == wx.WXK_RAW_CONTROL then\n        local ctrl = frame:FindFocus()\n        local parent = ctrl and ctrl:GetParent()\n        if parent and parent:GetClassInfo():GetClassName() == \"wxAuiNotebook\" then\n          local nb = parent:DynamicCast(\"wxAuiNotebook\")\n          focus = nb:GetPage(nb:GetSelection())\n          focus:SetFocus()\n          ide.timers.ctrltab:Start(20) -- check periodically\n        end\n      elseif key == wx.WXK_SHIFT then -- Shift\n        -- timer is started when `Ctrl` is pressed; even when `Shift` is pressed first,\n        -- the Ctrl will still be pressed eventually, which will start the timer\n      else\n        ide.timers.ctrltab:Stop()\n      end\n      event:Skip()\n    end)\nend\n\n-- add Ctrl-Tab and Ctrl-Shift-Tab processing on Linux as there is a similar issue\n-- to the one on OSX: http://trac.wxwidgets.org/ticket/17064,\n-- but at least on Linux the handling of Tab from CHAR_HOOK works.\nif ide.osname == 'Unix' then\n  ide.frame:Connect(wx.wxEVT_CHAR_HOOK, function(event)\n      local key = event:GetKeyCode()\n      if key == wx.WXK_TAB and wx.wxGetKeyState(wx.WXK_CONTROL)\n      and not wx.wxGetKeyState(wx.WXK_ALT) then\n        ide.frame:AddPendingEvent(wx.wxCommandEvent(wx.wxEVT_COMMAND_MENU_SELECTED,\n            wx.wxGetKeyState(wx.WXK_SHIFT) and ID.NOTEBOOKTABPREV or ID.NOTEBOOKTABNEXT\n        ))\n      else\n        event:Skip()\n      end\n    end)\nend\n\n-- The status bar content is drawn incorrectly if it is shown\n-- after being initially hidden.\n-- Show the statusbar and hide it after showing the frame, which fixes the issue.\nlocal statusbarfix = ide.osname == 'Windows' and not ide.frame:GetStatusBar():IsShown()\nif statusbarfix then ide.frame:GetStatusBar():Show(true) end\n\nide.frame:Show(true)\n\nif statusbarfix then ide.frame:GetStatusBar():Show(false) end\n\n-- somehow having wxAuiToolbar \"steals\" the focus from the editor on OSX;\n-- have to set the focus implicitly on the current editor (if any)\nif ide.osname == 'Macintosh' then\n  local editor = GetEditor()\n  if editor then editor:SetFocus() end\nend\n\n-- enable full screen view if supported (for example, on OSX)\nif ide:IsValidProperty(ide:GetMainFrame(), \"EnableFullScreenView\") then\n  ide:GetMainFrame():EnableFullScreenView()\nend\n\ndo\n  local args = {}\n  for _, a in ipairs(arg or {}) do args[a] = true end\n\n  wx.wxGetApp().MacOpenFiles = function(files)\n    for _, filename in ipairs(files) do\n      -- in some cases, OSX sends the last command line parameter that looks like a filename\n      -- to OpenFile callback, which gets reported to MacOpenFiles.\n      -- I've tried to trace why this happens, but the only reference I could find\n      -- is this one: http://lists.apple.com/archives/cocoa-dev/2009/May/msg00480.html\n      -- To avoid this issue, the filename is skipped if it's present in `arg`.\n      -- Also see http://trac.wxwidgets.org/ticket/14558 for related discussion.\n      if not args[filename] then ide:ActivateFile(filename) end\n    end\n    args = {} -- reset the argument cache as it only needs to be checked on the initial launch\n  end\nend\n\nwx.wxGetApp():MainLoop()\n\n-- There are several reasons for this call:\n-- (1) to fix a crash on OSX when closing with debugging in progress.\n-- (2) to fix a crash on Linux 32/64bit during GC cleanup in wxlua\n-- after an external process has been started from the IDE.\n-- (3) to fix exit on Windows when started as \"bin\\lua src\\main.lua\".\nos.exit()\n",
+			"file": "src/main.lua",
+			"file_size": 34943,
+			"file_write_time": 131332732700000000,
+			"settings":
+			{
+				"buffer_size": 34943,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "api/lua/corona.lua",
+			"settings":
+			{
+				"buffer_size": 178932,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "api/lua/baselib.lua",
+			"settings":
+			{
+				"buffer_size": 90224,
+				"encoding": "UTF-8",
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "src/editor/menu_project.lua",
+			"settings":
+			{
+				"buffer_size": 19053,
+				"line_ending": "Unix"
+			}
+		},
+		{
+			"file": "src/defs.lua",
+			"settings":
+			{
+				"buffer_size": 9979,
+				"line_ending": "Unix"
+			}
+		}
+	],
+	"build_system": "",
+	"build_system_choices":
+	[
+	],
+	"build_varint": "",
+	"command_palette":
+	{
+		"height": 127.0,
+		"last_filter": "Package Control: in",
+		"selected_items":
+		[
+			[
+				"Package Control: in",
+				"Package Control: Install Package"
+			],
+			[
+				"Package Control: ins",
+				"Package Control: Install Package"
+			],
+			[
+				"Package Control: lu a",
+				"Package Control: List Unmanaged Packages"
+			]
+		],
+		"width": 449.0
+	},
+	"console":
+	{
+		"height": 181.0,
+		"history":
+		[
+			"import urllib.request,os; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); open(os.path.join(ipp, pf), 'wb').write(urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ','%20')).read())",
+			"view.run_command('example')",
+			"import urllib.request,os,hashlib; h = '2915d1851351e5ee549c20394736b442' + '8bc59f460fa1548d1514676163dafc88'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)",
+			"import urllib.request,os; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); open(os.path.join(ipp, pf), 'wb').write(urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ','%20')).read())",
+			"import urllib.request,os,hashlib;",
+			"import urllib.request,os,hashlib;   ",
+			"import urllib.request,os,hashlib; h = '2915d1851351e5ee549c20394736b442' + '8bc59f460fa1548d1514676163dafc88'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://packagecontrol.io/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)",
+			"import urllib.request,os,hashlib; h = '7183a2d3e96f11eeadd761d777e62404' + 'e330c659d4bb41d3bdf022e94cab3cd0'; pf = 'Package Control.sublime-package'; ipp = sublime.installed_packages_path(); urllib.request.install_opener( urllib.request.build_opener( urllib.request.ProxyHandler()) ); by = urllib.request.urlopen( 'http://sublime.wbond.net/' + pf.replace(' ', '%20')).read(); dh = hashlib.sha256(by).hexdigest(); print('Error validating download (got %s instead of %s), please try manual install' % (dh, h)) if dh != h else open(os.path.join( ipp, pf), 'wb' ).write(by)"
+		]
+	},
+	"distraction_free":
+	{
+		"menu_visible": true,
+		"show_minimap": false,
+		"show_open_files": false,
+		"show_tabs": false,
+		"side_bar_visible": false,
+		"status_bar_visible": false
+	},
+	"expanded_folders":
+	[
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/api",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/api/lua",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/cfg",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/interpreters",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/src"
+	],
+	"file_history":
+	[
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/cfg/i18n/de.lua",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/interpreters/luabase.lua",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/interpreters/lfw.lua",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/interpreters/luadeb53.lua",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/api/lua/baselib.lua",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/zbstudio/MANIFEST",
+		"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master/interpreters/luadeb.lua",
+		"/Users/apple/Develop/ZeroBraneStudio-master/build/build-macosx.sh",
+		"/Users/apple/Documents/Xcode Project/IpaExporter/IpaExporter/Lua/Main.lua",
+		"/Users/apple/Desktop/test3.lua",
+		"/Users/apple/Desktop/test.lua",
+		"/Users/apple/tolua-5.2.4/Makefile",
+		"/Users/apple/Desktop/test2.lua",
+		"/Users/apple/Desktop/lua-5.3.3/src/Makefile",
+		"/Users/apple/Desktop/lua-5.3.3/Makefile",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/LuaForUnity.py",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/Package Control/Package Control.sublime-settings",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/Package Control/package-metadata.json",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/Main.sublime-menu",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/Default (Linux).sublime-keymap",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/Default (OSX).sublime-keymap",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/Default (Windows).sublime-keymap",
+		"/Users/apple/Desktop/test.py",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Main.lua",
+		"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/src/editor/commands.lua",
+		"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/src/editor/editor.lua",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/UnityShaderTemplete.py",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/Main.sublime-menu",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/UnityShader.sublime-settings",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/UnityShader.sublime-workspace",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/Lua/Lua.tmLanguage",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/UnityShader.tmLanguage",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/untitled.py",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/BasicShader.sublime-snippet",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/0_package_control_loader/00-package_control.py",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/0_package_control_loader/dependency-metadata.json",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/0_package_control_loader.txt",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/0_package_control_loader.sublime-package",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Installed Packages/Package Control.sublime-package",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/README.md",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/UnityShader.sublime-project",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/Lua/for-i-v-in-ipairs().sublime-snippet",
+		"/Users/apple/Desktop/Sublime Text.icns",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/UnityShader.YAML-tmLanguage",
+		"/Users/apple/Library/Application Support/Sublime Text 2/Packages/UnityShader/RangeProperty.sublime-snippet",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/eventlib.lua",
+		"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/src/editor/debugger.lua",
+		"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/src/editor/menu_project.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Common/define.lua",
+		"/Users/apple/Library/Developer/Xcode/DerivedData/Unity-iPhone-eswiqgxubicxhqgxeadbytqwsafa/Build/Products/Debug-iphoneos/ProductName.app/Data/Raw/lua/lua_test.unity3d",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/middleclass.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/View/PanelBase.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/View/TestPanel.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/StreamingAssets/StreamingAssets.manifest",
+		"/Users/apple/Documents/unity/lua_proj/Assets/StreamingAssets/StreamingAssets",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Logic/Game.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Controller/PromptCtrl.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Common/functions.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Logic/CtrlManager.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Controller/MessageCtrl.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/View/PromptPanel.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/Resources/Lua/Logic/Game.lua.bytes",
+		"/Users/apple/Documents/unity/lua_proj/Assets/Resources/Lua/Main.lua.bytes",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/3rd/cjson/test.lua",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/User/Preferences.sublime-settings",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/User/Default (OSX).sublime-keymap",
+		"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/src/editor/iofilters.lua",
+		"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/lualibs/encode.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/strict.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Test/A.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/View/MessagePanel.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Test/B.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/.DS_Store",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/A.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/events.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Logic/Network.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/Logic/LuaClass.lua",
+		"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua/3rd/pbc/protobuf.lua",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/User/Package Control.sublime-settings",
+		"/Users/apple/Library/Application Support/Sublime Text 3/Packages/Default/Preferences.sublime-settings",
+		"/Users/apple/Desktop/crashlog",
+		"/Users/apple/Downloads/CTAssetsPickerController-master/create_bundle.sh",
+		"/Users/apple/Desktop/CrashReport/20160517.crash",
+		"/Users/apple/Desktop/开发者证书/XC_comssjjsyinner.mobileprovision",
+		"/Users/apple/Downloads/0fb6d04c765063b96701b395ef41a6b1724dae0c_run.log",
+		"/Users/apple/Documents/disunity/disunity/disunity-core/src/main/java/info/ata4/unity/engine/SubstanceArchive.java",
+		"/Users/apple/Documents/disunity/disunity/scripts/disunity.bat",
+		"/Users/apple/Downloads/disunity_v0/README.md",
+		"/Users/apple/Downloads/56d788baf626dbd0d2765024cdee13bd034b5363_run.log",
+		"/Users/apple/Downloads/disunity_v0/disunity.sh",
+		"/Users/apple/Documents/disunity/disunity/disunity-core/src/main/java/info/ata4/unity/assetbundle/AssetBundleHeader.java",
+		"/Users/apple/Documents/disunity/disunity/README.md",
+		"/Users/apple/Documents/disunity/disunity/scripts/disunity.sh",
+		"/Users/apple/Downloads/Source/wpf/test/common/fxcop/suppression/Aero/Security.cs",
+		"/Users/apple/Downloads/Source/wpf/test/common/fxcop/suppression/Framework/API.cs",
+		"/Users/apple/Downloads/Source/wpf/test/common/fxcop/suppression/Framework/Security.cs",
+		"/Users/apple/Documents/egret/MyCube/src/Config/EnemyCubeConfig.ts"
+	],
+	"find":
+	{
+		"height": 40.0
+	},
+	"find_in_files":
+	{
+		"height": 105.0,
+		"where_history":
+		[
+			"/Users/apple/Develop/unity/ZeroBraneStudio_Unity/ZeroBraneStudio-master",
+			"/Applications/ZeroBraneStudio.app/Contents/ZeroBraneStudio/src",
+			"/Users/apple/Documents/unity/lua_proj/Assets/LuaFramework/Lua",
+			"<current file>",
+			"-*.txt,<current file>",
+			"-*.txt",
+			"/Users/apple/Documents/disunity/disunity"
+		]
+	},
+	"find_state":
+	{
+		"case_sensitive": false,
+		"find_history":
+		[
+			"loadToTab",
+			"proto",
+			"LoadInterpreter",
+			"loadToTab",
+			"loadToTab(",
+			"loadToTab",
+			"MainLoop",
+			"ide =",
+			"ide -=",
+			"ide.interpreters",
+			"targetMenu",
+			"frame",
+			"ide.frame",
+			"targetMenu",
+			"targetDirMenu",
+			"interpreters",
+			"targetMenu",
+			"interpreters/",
+			"interpreters",
+			"interpreters/",
+			"luadeb53",
+			"luadeb53.lua",
+			"lua/",
+			"/baselib",
+			"baselib",
+			"baselib.lua",
+			"lua/",
+			"love2d.lua",
+			"love2d",
+			"DisplayOutputLn",
+			"interpreters/",
+			"api/",
+			"baselib.lua",
+			"NewFile",
+			"NewFile()",
+			"NewFile（）",
+			"ID_NEW",
+			"ID_NEW\n",
+			"NewFile",
+			"ID_NEW",
+			"bz",
+			"02-bz2",
+			"shared\n",
+			"handle(",
+			"shared",
+			"command",
+			"done",
+			"exit",
+			"client",
+			"send",
+			"send = ",
+			"Handle",
+			"exit",
+			"breaknow =",
+			"breaknow ",
+			"killClient",
+			"handle(",
+			"handle",
+			"handle = ",
+			"mobdebug",
+			"handle = ",
+			"handle",
+			"handle(",
+			"handle)",
+			"handle",
+			"command",
+			"breaknow",
+			"debugger.breaknow",
+			"breaknow",
+			"DebuggerStop",
+			"killClient(",
+			"DebuggerShutdown",
+			"terminate",
+			"terminate(",
+			"terminate()",
+			"terminate",
+			"DebuggerShutdown",
+			"killClient",
+			"DebuggerShutdown",
+			"ID_STOPDEBUG",
+			"DebuggerShutdown",
+			"ID_STOPDEBUG",
+			"ID_DETACHDEBUG",
+			"DebuggerShutdown",
+			"DebuggerShutdown(",
+			"DebuggerShutdown",
+			"ID_STOPDEBUG",
+			"GameObject",
+			"GameManager",
+			"InitViewPanels",
+			"UnityEngine",
+			"TestGameObject",
+			"TestSendBinary",
+			"TestProtoType",
+			"TestPanel",
+			"subclass",
+			"AddClick",
+			"_includeMixin",
+			"include",
+			"_createClass",
+			"class",
+			"subclass",
+			"btnTrans",
+			"ByteBuffer",
+			"Util",
+			"_call",
+			"subclass",
+			"static",
+			"subclass",
+			"_declareInstanceMethod",
+			"_createClass",
+			"gameObject",
+			"UnityEngine",
+			"test_class_func",
+			"LoadFile(",
+			"LoadFile（",
+			"LoadFile",
+			"GetConfigIOFilter(\"input\")",
+			"GetConfigIOFilter",
+			"local file_text = FileRead(filePath)",
+			"file_text",
+			"resMgr",
+			"InitPanel",
+			"shared",
+			"btnOpen",
+			"prompt",
+			"logWarn",
+			"LuaClass"
+		],
+		"highlight": true,
+		"in_selection": false,
+		"preserve_case": false,
+		"regex": false,
+		"replace_history":
+		[
+		],
+		"reverse": false,
+		"show_context": true,
+		"use_buffer2": false,
+		"whole_word": false,
+		"wrap": true
+	},
+	"groups":
+	[
+		{
+			"selected": 0,
+			"sheets":
+			[
+				{
+					"buffer": 0,
+					"file": "src/main.lua",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 34943,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								10136,
+								10136
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/LuaForUnity/Lua.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 7704.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 0,
+					"type": "text"
+				},
+				{
+					"buffer": 1,
+					"file": "api/lua/corona.lua",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 178932,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								174742,
+								174742
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/LuaForUnity/Lua.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 100864.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 3,
+					"type": "text"
+				},
+				{
+					"buffer": 2,
+					"file": "api/lua/baselib.lua",
+					"semi_transient": true,
+					"settings":
+					{
+						"buffer_size": 90224,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								49634,
+								49637
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/LuaForUnity/Lua.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 14418.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 2,
+					"type": "text"
+				},
+				{
+					"buffer": 3,
+					"file": "src/editor/menu_project.lua",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 19053,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								5038,
+								5054
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/LuaForUnity/Lua.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 2431.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 1,
+					"type": "text"
+				},
+				{
+					"buffer": 4,
+					"file": "src/defs.lua",
+					"semi_transient": false,
+					"settings":
+					{
+						"buffer_size": 9979,
+						"regions":
+						{
+						},
+						"selection":
+						[
+							[
+								8754,
+								8754
+							]
+						],
+						"settings":
+						{
+							"syntax": "Packages/LuaForUnity/Lua.tmLanguage",
+							"tab_size": 2,
+							"translate_tabs_to_spaces": true
+						},
+						"translation.x": 0.0,
+						"translation.y": 6528.0,
+						"zoom_level": 1.0
+					},
+					"stack_index": 4,
+					"type": "text"
+				}
+			]
+		}
+	],
+	"incremental_find":
+	{
+		"height": 32.0
+	},
+	"input":
+	{
+		"height": 39.0
+	},
+	"layout":
+	{
+		"cells":
+		[
+			[
+				0,
+				0,
+				1,
+				1
+			]
+		],
+		"cols":
+		[
+			0.0,
+			1.0
+		],
+		"rows":
+		[
+			0.0,
+			1.0
+		]
+	},
+	"menu_visible": true,
+	"output.find_results":
+	{
+		"height": 68.0
+	},
+	"pinned_build_system": "",
+	"project": "ZeroBranceStudio.sublime-project",
+	"replace":
+	{
+		"height": 60.0
+	},
+	"save_all_on_build": true,
+	"select_file":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"menu_pro",
+				"src/editor/menu_project.lua"
+			],
+			[
+				"ide",
+				"cfg/i18n/de.lua"
+			],
+			[
+				"base",
+				"api/lua/baselib.lua"
+			],
+			[
+				"main",
+				"src/main.lua"
+			],
+			[
+				"luafor",
+				"LuaForUnity.py"
+			],
+			[
+				"luaf",
+				"LuaForUnity.py"
+			],
+			[
+				"even",
+				"eventlib.lua"
+			],
+			[
+				"game",
+				"Logic/Game.lua"
+			],
+			[
+				"panel",
+				"View/PanelBase.lua"
+			],
+			[
+				"testpan",
+				"View/TestPanel.lua"
+			],
+			[
+				"to",
+				"Lua/tolua.lua"
+			],
+			[
+				"func",
+				"Lua/Common/functions.lua"
+			],
+			[
+				"promp",
+				"Lua/Controller/PromptCtrl.lua"
+			],
+			[
+				"testp",
+				"Lua/View/TestPanel.lua"
+			],
+			[
+				"ctrlma",
+				"Lua/Logic/CtrlManager.lua"
+			],
+			[
+				"test",
+				"3rd/cjson/test.lua"
+			],
+			[
+				"contro",
+				"Controller/PromptCtrl.lua"
+			],
+			[
+				"pro",
+				"View/PromptPanel.lua"
+			],
+			[
+				"arch",
+				"main/java/info/ata4/unity/engine/SubstanceArchive.java"
+			],
+			[
+				"disunity.sh",
+				"disunity/scripts/disunity.sh"
+			]
+		],
+		"width": 0.0
+	},
+	"select_project":
+	{
+		"height": 500.0,
+		"last_filter": "",
+		"selected_items":
+		[
+			[
+				"",
+				"~/Library/Application Support/Sublime Text 3/Packages/LuaForUnity/LuaForUnity.sublime-project"
+			]
+		],
+		"width": 380.0
+	},
+	"select_symbol":
+	{
+		"height": 0.0,
+		"last_filter": "",
+		"selected_items":
+		[
+		],
+		"width": 0.0
+	},
+	"selected_group": 0,
+	"settings":
+	{
+	},
+	"show_minimap": true,
+	"show_open_files": false,
+	"show_tabs": true,
+	"side_bar_visible": true,
+	"side_bar_width": 165.0,
+	"status_bar_visible": true,
+	"template_settings":
+	{
+	}
+}
