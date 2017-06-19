@@ -35,4 +35,4 @@ _luaEnv.DoString (fileBytes, realPath, scriptEnv);
 
 最后记得编辑器Project->Start Debugger Server 勾上 运行unity  
 
-因为最近旧项目预计要搞更新，所以选择xlua来做这事情。顺便搞下zb编辑器的配置，放出来分享下。
+* 因为最近旧项目预计要搞更新，所以选择xlua来做这事情。顺便搞下zb编辑器的配置，放出来分享下。
